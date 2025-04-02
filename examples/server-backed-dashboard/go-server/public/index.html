@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vendor Incident Dashboard with KeyNav</title>
+    
+    <!-- KeyNav Library -->
+    <script src="../../../dist/key-nav.js"></script>
+    
+    <!-- ChartJS for Data Visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Leaflet for Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2ecc71;
+            --text-color: #333;
+            --light-bg: #f9f9f9;
+            --border-color: #ddd;
+            --hover-color: #f0f0f0;
+            --active-color: #e9f7fe;
+        }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            color: var(--text-color);
+        }
+        
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidenav styles */
+        .sidenav {
+            width: 250px;
+            background-color: var(--light-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 20px 0;
+        }
+        
+        .sidenav-header {
+            padding: 0 20px 20px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 20px;
+        }
+        
+        .sidenav-header h2 {
+            margin: 0;
+            color: var(--primary-color);
+        }
+        
+        .vendor-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .vendor-item {
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .vendor-item:hover {
+            background-color: var(--hover-color);
+        }
+        
+        /* Viewport styles */
+        .viewport-container {
+            flex: 1;
+            padding: 20px;
+            display: none;
+        }
+        
+        .viewport-container.active {
+            display: block;
+        }
+        
+        .dashboard-header {
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .dashboard-header h2 {
+            margin: 0;
+            color: var(--primary-color);
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 300px auto;
+            gap: 20px;
+        }
+        
+        .chart-container, .map-container, .table-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+        }
+        
+        .chart-container, .map-container {
+            height: 300px;
+        }
+        
+        .table-container {
+            grid-column: 1 / -1;
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        table th, table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        table th {
+            background-color: var(--light-bg);
+            font-weight: 600;
+        }
+        
+        /* Loading state */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            font-style: italic;
+            color: #777;
+        }
+        
+        /* KeyNav highlighting */
+        .nav-highlight {
+            background-color: var(--active-color) !important;
+            border-left: 4px solid var(--primary-color) !important;
+            font-weight: bold;
+        }
+        
+        .nav-active {
+            background-color: var(--active-color) !important;
+            border-left: 4px solid var(--secondary-color) !important;
+            font-weight: bold;
+        }
+        
+        /* Instructions */
+        .instructions {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="nav-container" class="container">
+        <!-- Sidenav -->
+        <div id="sidenav" class="sidenav section">
+            <div class="sidenav-header">
+                <h2>Vendor Incidents</h2>
+                <p>Use arrow keys to navigate</p>
+            </div>
+            <ul id="vendor-list" class="vendor-list section">
+                <!-- Will be populated by JavaScript -->
+                <li class="loading">Loading vendors...</li>
+            </ul>
+        </div>
+        
+        <!-- Viewport Container -->
+        <div id="viewports-container">
+            <!-- Viewports will be dynamically added here -->
+            <div class="viewport-container active">
+                <div class="dashboard-header">
+                    <h2>Select a vendor from the sidebar</h2>
+                </div>
+                <p>Use your keyboard arrows to navigate between vendors.</p>
+                <p>Press Enter to view incident details for the selected vendor.</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="instructions">
+        <p>↑/↓ Navigate between vendors | Enter: Select vendor | Esc: Return to vendor list</p>
+    </div>
+    
+    <script>
+        // Base API URL
+        const API_BASE_URL = 'http://localhost:3000/api';
+        
+        // DOM Elements
+        const vendorListEl = document.getElementById('vendor-list');
+        const viewportsContainer = document.getElementById('viewports-container');
+        
+        // Charts references for cleanup
+        const charts = {};
+        // Map references for cleanup
+        const maps = {};
+        
+        // Fetch list of vendors and initialize the UI
+        async function initializeApp() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/vendors`);
+                const vendors = await response.json();
+                
+                // Clear loading state
+                vendorListEl.innerHTML = '';
+                
+                // Create vendor items in sidenav
+                vendors.forEach(vendor => {
+                    const vendorItem = document.createElement('li');
+                    vendorItem.id = vendor.id;
+                    vendorItem.className = 'vendor-item item';
+                    vendorItem.dataset.viewport = `viewport-${vendor.id}`;
+                    vendorItem.textContent = vendor.name;
+                    vendorListEl.appendChild(vendorItem);
+                    
+                    // Create the corresponding viewport (initially empty)
+                    createEmptyViewport(vendor);
+                });
+                
+                // Initialize KeyNav
+                const nav = KeyNav.createSidenavViewport(document.getElementById('nav-container'));
+                
+            } catch (error) {
+                console.error('Failed to fetch vendors:', error);
+                vendorListEl.innerHTML = '<li class="vendor-item">Error loading vendors</li>';
+            }
+        }
+        
+        // Create an empty viewport for a vendor
+        function createEmptyViewport(vendor) {
+            const viewportId = `viewport-${vendor.id}`;
+            
+            // Check if viewport already exists
+            if (document.getElementById(viewportId)) {
+                return;
+            }
+            
+            // Create viewport container
+            const viewportEl = document.createElement('div');
+            viewportEl.id = viewportId;
+            viewportEl.className = 'viewport-container viewport section';
+            
+            // Set initial content with loading state
+            viewportEl.innerHTML = `
+                <div class="dashboard-header">
+                    <h2>${vendor.name} Incidents</h2>
+                </div>
+                <div class="dashboard-grid">
+                    <div id="chart-${vendor.id}" class="chart-container">
+                        <div class="loading">Loading chart data...</div>
+                    </div>
+                    <div id="map-${vendor.id}" class="map-container">
+                        <div class="loading">Loading map data...</div>
+                    </div>
+                    <div id="table-${vendor.id}" class="table-container">
+                        <div class="loading">Loading incident data...</div>
+                    </div>
+                </div>
+            `;
+            
+            // Add to document
+            viewportsContainer.appendChild(viewportEl);
+        }
+        
+        // Load vendor data when a viewport becomes active
+        document.addEventListener('keydown', async function(e) {
+            // Wait for UI update to complete
+            setTimeout(async () => {
+                const activeViewport = document.querySelector('.viewport.active');
+                if (!activeViewport) return;
+                
+                const vendorId = activeViewport.id.replace('viewport-', '');
+                
+                // Check if we've already loaded this vendor's data
+                if (activeViewport.dataset.loaded === 'true') return;
+                
+                // Mark as loaded to prevent duplicate loading
+                activeViewport.dataset.loaded = 'true';
+                
+                // Load data for this vendor
+                try {
+                    await loadVendorData(vendorId);
+                } catch (error) {
+                    console.error(`Error loading data for ${vendorId}:`, error);
+                }
+            }, 100);
+        });
+        
+        // Load all data for a vendor
+        async function loadVendorData(vendorId) {
+            // Fetch incidents data
+            const incidentsPromise = fetch(`${API_BASE_URL}/vendors/${vendorId}/incidents`)
+                .then(res => res.json());
+            
+            // Fetch date aggregation for chart
+            const chartDataPromise = fetch(`${API_BASE_URL}/vendors/${vendorId}/incidents/by-date`)
+                .then(res => res.json());
+            
+            // Wait for both requests to complete
+            const [incidents, chartData] = await Promise.all([incidentsPromise, chartDataPromise]);
+            
+            // Update the UI with fetched data
+            renderChart(vendorId, chartData);
+            renderMap(vendorId, incidents);
+            renderTable(vendorId, incidents);
+        }
+        
+        // Render the histogram chart
+        function renderChart(vendorId, chartData) {
+            const chartContainer = document.getElementById(`chart-${vendorId}`);
+            chartContainer.innerHTML = '<canvas></canvas>';
+            const canvas = chartContainer.querySelector('canvas');
+            
+            // Prepare data for Chart.js
+            const labels = chartData.map(item => item.incident_date);
+            const counts = chartData.map(item => item.count);
+            
+            // Create the chart
+            const ctx = canvas.getContext('2d');
+            
+            // Destroy previous chart if exists
+            if (charts[vendorId]) {
+                charts[vendorId].destroy();
+            }
+            
+            charts[vendorId] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Incidents per Day',
+                        data: counts,
+                        backgroundColor: 'rgba(52, 152, 219, 0.7)',
+                        borderColor: 'rgba(52, 152, 219, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Render the map with incident locations
+        function renderMap(vendorId, incidents) {
+            const mapContainer = document.getElementById(`map-${vendorId}`);
+            mapContainer.innerHTML = '';
+            
+            // Clean up previous map
+            if (maps[vendorId]) {
+                maps[vendorId].remove();
+            }
+            
+            // Initialize the map
+            maps[vendorId] = L.map(mapContainer).setView([40.7, -74.0], 10);
+            
+            // Add tile layer (OpenStreetMap)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(maps[vendorId]);
+            
+            // Add markers for each incident
+            incidents.forEach(incident => {
+                const marker = L.marker([incident.lat, incident.lng]).addTo(maps[vendorId]);
+                marker.bindPopup(`
+                    <strong>Date:</strong> ${incident.incident_date}<br>
+                    <strong>ID:</strong> ${incident.id}
+                `);
+            });
+            
+            // Set view to fit all markers
+            if (incidents.length > 0) {
+                const latLngs = incidents.map(incident => [incident.lat, incident.lng]);
+                const bounds = L.latLngBounds(latLngs);
+                maps[vendorId].fitBounds(bounds);
+            }
+        }
+        
+        // Render the data table
+        function renderTable(vendorId, incidents) {
+            const tableContainer = document.getElementById(`table-${vendorId}`);
+            
+            if (incidents.length === 0) {
+                tableContainer.innerHTML = '<p>No incidents found.</p>';
+                return;
+            }
+            
+            // Get schema from first incident
+            const firstIncident = incidents[0];
+            const dataKeys = Object.keys(firstIncident.data);
+            
+            // Create table
+            let tableHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Date</th>
+                            ${dataKeys.map(key => `<th>${formatColumnName(key)}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            // Add rows for each incident
+            incidents.forEach(incident => {
+                tableHTML += `
+                    <tr>
+                        <td>${incident.id}</td>
+                        <td>${incident.incident_date}</td>
+                        ${dataKeys.map(key => `<td>${formatValue(incident.data[key])}</td>`).join('')}
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+            
+            tableContainer.innerHTML = tableHTML;
+        }
+        
+        // Helper function to format column names
+        function formatColumnName(key) {
+            return key
+                .replace(/_/g, ' ')
+                .replace(/\w\S*/g, txt => txt.charAt(0).toUpperCase() + txt.substr(1));
+        }
+        
+        // Helper function to format cell values
+        function formatValue(value) {
+            if (value === true) return '✓';
+            if (value === false) return '✗';
+            return value;
+        }
+        
+        // Initialize the app
+        initializeApp();
+    </script>
+</body>
+</html> 
