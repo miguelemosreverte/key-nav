@@ -27,6 +27,14 @@ Or include directly in your HTML:
 <script src="https://unpkg.com/@miguellemos/key-nav@1.0.0/dist/key-nav.js"></script>
 ```
 
+## CDN
+
+Include the library directly in your HTML using the following CDN link:
+
+```html
+<script src="https://unpkg.com/@miguellemos/key-nav@1.0.4/dist/key-nav.js"></script>
+```
+
 ## Quick Start
 
 ### Basic Navigation
