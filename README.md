@@ -24,7 +24,7 @@ npm install @miguellemos/key-nav
 Or include directly in your HTML:
 
 ```html
-<script src="https://unpkg.com/@miguellemos/key-nav@1.0.5/dist/key-nav.js"></script>
+<script src="https://unpkg.com/@miguellemos/key-nav@1.0.6/dist/key-nav.js"></script>
 ```
 
 ## CDN
@@ -32,7 +32,7 @@ Or include directly in your HTML:
 Include the library directly in your HTML using the following CDN link:
 
 ```html
-<script src="https://unpkg.com/@miguellemos/key-nav@1.0.5/dist/key-nav.js"></script>
+<script src="https://unpkg.com/@miguellemos/key-nav@1.0.6/dist/key-nav.js"></script>
 ```
 
 ## Quick Start

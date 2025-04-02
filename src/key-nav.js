@@ -1,4 +1,4 @@
-Hi// Pure Functional Navigation Framework
+// Pure Functional Navigation Framework
 
 // Types
 const NavigableKind = {
