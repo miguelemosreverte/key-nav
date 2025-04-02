@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Elements Navigation Demo</title>
+    <script src="../../dist/key-nav.js"></script>
+    <style>
+        .nav-highlight {
+            outline: 3px solid #ffc107 !important;
+            outline-offset: 2px;
+            position: relative;
+            z-index: 1;
+            transition: outline-color 0.2s ease;
+            background-color: rgba(255, 193, 7, 0.1);
+        }
+        
+        .nav-active {
+            outline: 3px solid #28a745 !important;
+            outline-offset: 2px;
+            position: relative;
+            z-index: 2;
+            transition: outline-color 0.2s ease;
+            background-color: rgba(40, 167, 69, 0.1);
+        }
+        
+        .section {
+            margin: 10px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            position: relative;
+        }
+        
+        .item {
+            margin: 5px;
+            padding: 5px;
+            border: 1px solid #eee;
+            position: relative;
+        }
+        
+        button {
+            margin: 10px;
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        .controls {
+            margin: 20px 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <p>Use arrow keys to navigate, Enter to go deeper, Escape to go back.</p>
+        <button id="add-vendor">Add Vendor</button>
+        <button id="add-event">Add Event</button>
+        <button id="add-location">Add Location</button>
+    </div>
+    
+    <div id="root" class="section">
+        <div id="vendors" class="section">
+            <div id="vendor1" class="item">Vendor 1</div>
+            <div id="vendor2" class="item">Vendor 2</div>
+        </div>
+        <div id="timeline" class="section">
+            <div id="event1" class="item">Event 1</div>
+            <div id="event2" class="item">Event 2</div>
+        </div>
+        <div id="map" class="section">
+            <div id="location1" class="item">Location 1</div>
+            <div id="location2" class="item">Location 2</div>
+        </div>
+    </div>
+    
+    <script>
+        // Initialize navigation
+        const nav = KeyNav.create(document.getElementById('root'));
+        
+        // Counter for IDs
+        let vendorCount = 3; // Starting from 3 as we already have 2
+        let eventCount = 3;
+        let locationCount = 3;
+        
+        // Add Vendor button
+        document.getElementById('add-vendor').addEventListener('click', () => {
+            const vendors = document.getElementById('vendors');
+            const newVendor = document.createElement('div');
+            newVendor.id = `vendor${vendorCount}`;
+            newVendor.className = 'item';
+            newVendor.textContent = `Vendor ${vendorCount}`;
+            vendors.appendChild(newVendor);
+            vendorCount++;
+            
+            // Refresh navigation to include the new element
+            nav.refresh();
+        });
+        
+        // Add Event button
+        document.getElementById('add-event').addEventListener('click', () => {
+            const timeline = document.getElementById('timeline');
+            const newEvent = document.createElement('div');
+            newEvent.id = `event${eventCount}`;
+            newEvent.className = 'item';
+            newEvent.textContent = `Event ${eventCount}`;
+            timeline.appendChild(newEvent);
+            eventCount++;
+            
+            // Refresh navigation to include the new element
+            nav.refresh();
+        });
+        
+        // Add Location button
+        document.getElementById('add-location').addEventListener('click', () => {
+            const map = document.getElementById('map');
+            const newLocation = document.createElement('div');
+            newLocation.id = `location${locationCount}`;
+            newLocation.className = 'item';
+            newLocation.textContent = `Location ${locationCount}`;
+            map.appendChild(newLocation);
+            locationCount++;
+            
+            // Refresh navigation to include the new element
+            nav.refresh();
+        });
+    </script>
+</body>
+</html> 

@@ -306,41 +306,84 @@ const createNav = (rootElement, options = {}) => {
         return element;
     };
     
-    const root = parseElement(rootElement);
-    console.log('Root element:', root.id, root.kind);
+    // Initialize with empty structures
+    let root = null;
+    let allElements = [];
+    let currentState = null;
+    let initialMonadState = null;
+    let context = null;
+    let mutationObserver = null;
     
-    // Create initial state monad
-    let initialMonadState = NavMonad.pure(root);
-    
-    // Get all elements for easy lookup
-    const allElements = getAllElements(root);
-    
-    // Create navigation context based on options
-    const context = {
-        mode: options.mode || NavigationMode.Standard,
-        allElements: allElements,
-        options: options
+    // Function to (re)parse the DOM structure
+    const refreshNavigation = () => {
+        console.log('Refreshing navigation structure...');
+        
+        // Parse the DOM structure again
+        root = parseElement(rootElement);
+        console.log('Root element:', root.id, root.kind);
+        
+        // Get all elements for easy lookup
+        allElements = getAllElements(root);
+        
+        // Create navigation context based on options
+        context = {
+            mode: options.mode || NavigationMode.Standard,
+            allElements: allElements,
+            options: options
+        };
+        
+        // Create initial state monad if it doesn't exist yet
+        if (!initialMonadState) {
+            initialMonadState = NavMonad.pure(root);
+        }
+        
+        // Try to maintain current selection if possible
+        if (currentState && currentState.value) {
+            const currentId = currentState.value.id;
+            // Try to find the same element in the new structure
+            const sameElement = allElements.find(el => el.id === currentId);
+            
+            if (sameElement) {
+                // Keep the same selected element
+                currentState = NavMonad.pure(sameElement);
+                console.log('Maintaining selection on:', sameElement.id);
+            } else {
+                // Fall back to root if element no longer exists
+                currentState = NavMonad.pure(root);
+                console.log('Selected element no longer exists, falling back to root');
+            }
+        } else {
+            // Set initial current state
+            currentState = initialMonadState;
+        }
+        
+        // If it's a sidenav-viewport pattern and initialItem is specified, find it
+        if (context.mode === NavigationMode.SidenavViewport && options.initialItem) {
+            const initialElement = allElements.find(el => el.id === options.initialItem);
+            if (initialElement) {
+                currentState = NavMonad.pure(initialElement);
+                console.log('Setting initial state to:', initialElement.id);
+            }
+        }
+        
+        // Update UI
+        if (currentState.value) {
+            UI.highlight(currentState.value);
+            if (context.mode === NavigationMode.SidenavViewport) {
+                UI.updateViewport(currentState.value, context);
+            }
+        }
+        
+        return {
+            root,
+            allElements,
+            currentState,
+            context
+        };
     };
     
-    // Set initial current state
-    let currentState = initialMonadState;
-    
-    // If it's a sidenav-viewport pattern and initialItem is specified, find it
-    if (context.mode === NavigationMode.SidenavViewport && options.initialItem) {
-        const initialElement = allElements.find(el => el.id === options.initialItem);
-        if (initialElement) {
-            currentState = NavMonad.pure(initialElement);
-            console.log('Setting initial state to:', initialElement.id);
-        }
-    }
-    
-    // Initialize UI
-    if (currentState.value) {
-        UI.highlight(currentState.value);
-        if (context.mode === NavigationMode.SidenavViewport) {
-            UI.updateViewport(currentState.value, context);
-        }
-    }
+    // Initial parsing
+    refreshNavigation();
     
     // Set up keyboard listener
     document.addEventListener('keydown', (e) => {
@@ -365,12 +408,74 @@ const createNav = (rootElement, options = {}) => {
         e.preventDefault();
     });
     
+    // Set up mutation observer to detect DOM changes
+    const setupObserver = () => {
+        // Disconnect previous observer if exists
+        if (mutationObserver) {
+            mutationObserver.disconnect();
+        }
+        
+        // Create a debounced version of refresh to avoid excessive updates
+        let refreshTimeout = null;
+        const debouncedRefresh = () => {
+            if (refreshTimeout) {
+                clearTimeout(refreshTimeout);
+            }
+            refreshTimeout = setTimeout(() => {
+                console.log('DOM mutation detected, refreshing navigation');
+                refreshNavigation();
+                refreshTimeout = null;
+            }, 100); // 100ms debounce
+        };
+        
+        // Create new observer
+        mutationObserver = new MutationObserver((mutations) => {
+            // Only refresh if we have mutations with added/removed nodes
+            const hasRelevantMutations = mutations.some(mutation => 
+                mutation.type === 'childList' && 
+                (mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0)
+            );
+            
+            if (hasRelevantMutations) {
+                debouncedRefresh();
+            }
+        });
+        
+        // Start observing rootElement for all changes to the DOM tree
+        mutationObserver.observe(rootElement, { 
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['id', 'class'] // Only care about ID and class changes
+        });
+        
+        console.log('Mutation observer set up for automatic refresh');
+    };
+    
+    // Set up the mutation observer if autoRefresh is enabled
+    if (options.autoRefresh !== false) { // Enabled by default
+        setupObserver();
+    }
+    
     return {
         getCurrentState: () => currentState,
         getInitialParsedState: () => initialMonadState,
         getMode: () => context.mode,
         getAllElements: () => allElements,
-        getHistory: () => currentState?.history || []
+        getHistory: () => currentState?.history || [],
+        refresh: refreshNavigation, // Expose refresh method for manual updates
+        enableAutoRefresh: () => {
+            setupObserver();
+            return true;
+        },
+        disableAutoRefresh: () => {
+            if (mutationObserver) {
+                mutationObserver.disconnect();
+                mutationObserver = null;
+                return true;
+            }
+            return false;
+        }
     };
 };
 
@@ -404,6 +509,35 @@ const createSidenavViewport = (containerElement, options = {}) => {
             });
         }
     }
+    
+    // Enhance the refresh method to also handle sidenav-viewport specifics
+    const originalRefresh = nav.refresh;
+    nav.refresh = () => {
+        // Call the original refresh method
+        const result = originalRefresh();
+        
+        // If no initial item was specified, find the first vendor after refresh
+        if (!fullOptions.initialItem) {
+            const vendors = nav.getAllElements().filter(el => 
+                el.value.dataset && el.value.dataset.viewport
+            );
+            
+            if (vendors.length > 0) {
+                const firstVendor = vendors[0];
+                // If current state is not a vendor or viewport, make the first vendor active
+                const currentState = nav.getCurrentState();
+                if (!currentState || !currentState.value) {
+                    UI.highlight(firstVendor);
+                    UI.updateViewport(firstVendor, {
+                        mode: NavigationMode.SidenavViewport,
+                        allElements: nav.getAllElements()
+                    });
+                }
+            }
+        }
+        
+        return result;
+    };
     
     return nav;
 };
