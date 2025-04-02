@@ -6,7 +6,7 @@
     <title>Vendor Incident Dashboard with KeyNav</title>
     
     <!-- KeyNav Library -->
-    <script src="../../../dist/key-nav.js"></script>
+    <script src="/dashboard/key-nav.js"></script>
     
     <!-- ChartJS for Data Visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -82,11 +82,6 @@
         .viewport-container {
             flex: 1;
             padding: 20px;
-            display: none;
-        }
-        
-        .viewport-container.active {
-            display: block;
         }
         
         .dashboard-header {
@@ -149,17 +144,14 @@
             color: #777;
         }
         
-        /* KeyNav highlighting */
-        .nav-highlight {
-            background-color: var(--active-color) !important;
-            border-left: 4px solid var(--primary-color) !important;
-            font-weight: bold;
+        /* Table row hover and selection */
+        .table-container table tr:hover {
+            background-color: #f0f8ff;
+            cursor: pointer;
         }
         
-        .nav-active {
-            background-color: var(--active-color) !important;
-            border-left: 4px solid var(--secondary-color) !important;
-            font-weight: bold;
+        .table-container table tr.selected {
+            background-color: #d4edda;
         }
         
         /* Instructions */
@@ -172,25 +164,39 @@
             padding: 10px 15px;
             border-radius: 8px;
             font-size: 14px;
+            z-index: 9999;
+        }
+        
+        /* Custom styling for navigation highlighting */
+        .key-nav-highlight {
+            outline: 3px solid #ffc107 !important;
+            outline-offset: 2px;
+            background-color: rgba(255, 193, 7, 0.1);
+        }
+        
+        .key-nav-active {
+            outline: 3px solid #28a745 !important;
+            outline-offset: 2px;
+            background-color: rgba(40, 167, 69, 0.1);
         }
     </style>
 </head>
 <body>
-    <div id="nav-container" class="container">
+    <div id="nav-container" class="container key-nav-container">
         <!-- Sidenav -->
-        <div id="sidenav" class="sidenav section">
+        <div id="sidenav" class="sidenav key-nav-container">
             <div class="sidenav-header">
                 <h2>Vendor Incidents</h2>
                 <p>Use arrow keys to navigate</p>
             </div>
-            <ul id="vendor-list" class="vendor-list section">
+            <ul id="vendor-list" class="vendor-list key-nav-container">
                 <!-- Will be populated by JavaScript -->
                 <li class="loading">Loading vendors...</li>
             </ul>
         </div>
         
         <!-- Viewport Container -->
-        <div id="viewports-container">
+        <div id="viewports-container" class="key-nav-container">
             <!-- Viewports will be dynamically added here -->
             <div class="viewport-container active">
                 <div class="dashboard-header">
@@ -203,28 +209,44 @@
     </div>
     
     <div class="instructions">
-        <p>↑/↓ Navigate between vendors | Enter: Select vendor | Esc: Return to vendor list</p>
+        <p>↑/↓ Navigate vendors | Enter: Select vendor/section | Esc: Return to previous level</p>
+        <div id="debug-info" style="font-size: 12px; margin-top: 5px;"></div>
     </div>
     
     <script>
         // Base API URL
-        const API_BASE_URL = 'http://localhost:3000/api';
+        const API_BASE_URL = 'http://localhost:9091/api';
         
         // DOM Elements
         const vendorListEl = document.getElementById('vendor-list');
         const viewportsContainer = document.getElementById('viewports-container');
+        const debugInfoEl = document.getElementById('debug-info');
         
         // Charts references for cleanup
         const charts = {};
         // Map references for cleanup
         const maps = {};
         
-        // Fetch list of vendors and initialize the UI
+        // Our vendors array
+        const vendors = [
+            { id: 'vendor1', name: 'Vendor 1' },
+            { id: 'vendor2', name: 'Vendor 2' },
+            { id: 'vendor3', name: 'Vendor 3' },
+            { id: 'vendor4', name: 'Vendor 4' }
+        ];
+        
+        // Debug logging - trace all key events
+        document.addEventListener('keydown', function(e) {
+            if (debugInfoEl) {
+                const nav = window.nav;
+                const current = nav ? nav.getCurrent() : null;
+                debugInfoEl.textContent = `Key: ${e.key} | Current: ${current?.id || 'none'} - State: ${current?.state || 'none'}`;
+            }
+        }, true); // Use capture phase to see all events
+
+        // Initialize the app
         async function initializeApp() {
             try {
-                const response = await fetch(`${API_BASE_URL}/vendors`);
-                const vendors = await response.json();
-                
                 // Clear loading state
                 vendorListEl.innerHTML = '';
                 
@@ -232,7 +254,7 @@
                 vendors.forEach(vendor => {
                     const vendorItem = document.createElement('li');
                     vendorItem.id = vendor.id;
-                    vendorItem.className = 'vendor-item item';
+                    vendorItem.className = 'vendor-item';
                     vendorItem.dataset.viewport = `viewport-${vendor.id}`;
                     vendorItem.textContent = vendor.name;
                     vendorListEl.appendChild(vendorItem);
@@ -241,13 +263,124 @@
                     createEmptyViewport(vendor);
                 });
                 
-                // Initialize KeyNav
-                const nav = KeyNav.createSidenavViewport(document.getElementById('nav-container'));
+                // Initialize KeyNav with sidenav-viewport pattern
+                window.nav = KeyNav.createSidenavViewport(document.getElementById('nav-container'), {
+                    viewportSelector: '.viewport-container',
+                    initialItem: vendors[0].id
+                });
+                
+                // Load data for all vendors to ensure they're ready
+                for (const vendor of vendors) {
+                    loadVendorData(vendor.id);
+                }
+                
+                // Set up custom key handlers for the different sections
+                setupCustomKeyHandlers();
                 
             } catch (error) {
-                console.error('Failed to fetch vendors:', error);
+                console.error('Failed to initialize UI:', error);
                 vendorListEl.innerHTML = '<li class="vendor-item">Error loading vendors</li>';
             }
+        }
+        
+        // Set up section-specific key handlers
+        function setupCustomKeyHandlers() {
+            vendors.forEach(vendor => {
+                // Chart section handlers
+                const chartNode = document.getElementById(`chart-${vendor.id}`);
+                if (chartNode) {
+                    chartNode.addEventListener('keydown', function(e) {
+                        if (chartNode.classList.contains('key-nav-active')) {
+                            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                                console.log(`Chart ${vendor.id} handling ${e.key}`);
+                                e.stopPropagation();
+                                e.preventDefault();
+                                // Would implement chart navigation here
+                            }
+                        }
+                    });
+                }
+                
+                // Map section handlers
+                const mapNode = document.getElementById(`map-${vendor.id}`);
+                if (mapNode) {
+                    mapNode.addEventListener('keydown', function(e) {
+                        if (mapNode.classList.contains('key-nav-active')) {
+                            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', '+', '-'].includes(e.key)) {
+                                console.log(`Map ${vendor.id} handling ${e.key}`);
+                                e.stopPropagation();
+                                e.preventDefault();
+                                
+                                const map = maps[vendor.id];
+                                if (map) {
+                                    const panAmount = 50; // pixels
+                                    
+                                    if (e.key === 'ArrowUp') map.panBy([0, -panAmount]);
+                                    if (e.key === 'ArrowDown') map.panBy([0, panAmount]);
+                                    if (e.key === 'ArrowLeft') map.panBy([-panAmount, 0]);
+                                    if (e.key === 'ArrowRight') map.panBy([panAmount, 0]);
+                                    if (e.key === '+') map.zoomIn();
+                                    if (e.key === '-') map.zoomOut();
+                                }
+                            }
+                        }
+                    });
+                }
+                
+                // Table section handlers
+                const tableNode = document.getElementById(`table-${vendor.id}`);
+                if (tableNode) {
+                    tableNode.addEventListener('keydown', function(e) {
+                        if (tableNode.classList.contains('key-nav-active')) {
+                            if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Enter') {
+                                console.log(`Table ${vendor.id} handling ${e.key}`);
+                                e.stopPropagation();
+                                e.preventDefault();
+                                
+                                // Get table rows
+                                const rows = tableNode.querySelectorAll('tbody tr');
+                                if (rows.length === 0) return;
+                                
+                                // Find current selected row or initialize to first
+                                let selectedIndex = Array.from(rows).findIndex(row => row.classList.contains('selected'));
+                                if (selectedIndex === -1) {
+                                    selectedIndex = 0;
+                                    rows[selectedIndex].classList.add('selected');
+                                }
+                                
+                                if (e.key === 'ArrowUp') {
+                                    rows[selectedIndex].classList.remove('selected');
+                                    selectedIndex = Math.max(0, selectedIndex - 1);
+                                    rows[selectedIndex].classList.add('selected');
+                                    rows[selectedIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                } else if (e.key === 'ArrowDown') {
+                                    rows[selectedIndex].classList.remove('selected');
+                                    selectedIndex = Math.min(rows.length - 1, selectedIndex + 1);
+                                    rows[selectedIndex].classList.add('selected');
+                                    rows[selectedIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                } else if (e.key === 'Enter') {
+                                    // Action on row (e.g. show details, highlight on map)
+                                    const rowData = rows[selectedIndex];
+                                    const incidentId = rowData.cells[0].textContent;
+                                    
+                                    // Highlight marker on map if available
+                                    if (maps[vendor.id]) {
+                                        const markers = maps[vendor.id]._layers;
+                                        for (const id in markers) {
+                                            const marker = markers[id];
+                                            if (marker.getPopup && marker.getPopup().getContent().includes(incidentId)) {
+                                                marker.openPopup();
+                                                maps[vendor.id].setView(marker.getLatLng(), maps[vendor.id].getZoom());
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            });
         }
         
         // Create an empty viewport for a vendor
@@ -262,21 +395,24 @@
             // Create viewport container
             const viewportEl = document.createElement('div');
             viewportEl.id = viewportId;
-            viewportEl.className = 'viewport-container viewport section';
+            viewportEl.className = 'viewport-container key-nav-viewport';
             
             // Set initial content with loading state
             viewportEl.innerHTML = `
                 <div class="dashboard-header">
                     <h2>${vendor.name} Incidents</h2>
                 </div>
-                <div class="dashboard-grid">
+                <div id="dashboard-grid-${vendor.id}" class="dashboard-grid key-nav-container">
                     <div id="chart-${vendor.id}" class="chart-container">
+                        <h3>Incidents Over Time</h3>
                         <div class="loading">Loading chart data...</div>
                     </div>
                     <div id="map-${vendor.id}" class="map-container">
+                        <h3>Incident Locations</h3>
                         <div class="loading">Loading map data...</div>
                     </div>
                     <div id="table-${vendor.id}" class="table-container">
+                        <h3>Incident Details</h3>
                         <div class="loading">Loading incident data...</div>
                     </div>
                 </div>
@@ -286,52 +422,51 @@
             viewportsContainer.appendChild(viewportEl);
         }
         
-        // Load vendor data when a viewport becomes active
-        document.addEventListener('keydown', async function(e) {
-            // Wait for UI update to complete
-            setTimeout(async () => {
-                const activeViewport = document.querySelector('.viewport.active');
-                if (!activeViewport) return;
-                
-                const vendorId = activeViewport.id.replace('viewport-', '');
-                
-                // Check if we've already loaded this vendor's data
-                if (activeViewport.dataset.loaded === 'true') return;
-                
-                // Mark as loaded to prevent duplicate loading
-                activeViewport.dataset.loaded = 'true';
-                
-                // Load data for this vendor
-                try {
-                    await loadVendorData(vendorId);
-                } catch (error) {
-                    console.error(`Error loading data for ${vendorId}:`, error);
-                }
-            }, 100);
-        });
-        
         // Load all data for a vendor
         async function loadVendorData(vendorId) {
-            // Fetch incidents data
-            const incidentsPromise = fetch(`${API_BASE_URL}/vendors/${vendorId}/incidents`)
-                .then(res => res.json());
-            
-            // Fetch date aggregation for chart
-            const chartDataPromise = fetch(`${API_BASE_URL}/vendors/${vendorId}/incidents/by-date`)
-                .then(res => res.json());
-            
-            // Wait for both requests to complete
-            const [incidents, chartData] = await Promise.all([incidentsPromise, chartDataPromise]);
-            
-            // Update the UI with fetched data
-            renderChart(vendorId, chartData);
-            renderMap(vendorId, incidents);
-            renderTable(vendorId, incidents);
+            try {
+                // Fetch incidents data from our API
+                const response = await fetch(`${API_BASE_URL}/incidents/${vendorId}`);
+                const incidents = await response.json();
+                
+                // Process data for the chart (group by date)
+                const dateMap = new Map();
+                incidents.forEach(incident => {
+                    const date = incident.incident_date.split('T')[0];
+                    if (!dateMap.has(date)) {
+                        dateMap.set(date, 0);
+                    }
+                    dateMap.set(date, dateMap.get(date) + 1);
+                });
+                
+                const chartData = Array.from(dateMap.entries()).map(([date, count]) => ({
+                    incident_date: date,
+                    count: count
+                }));
+                
+                // Update the UI with fetched data
+                renderChart(vendorId, chartData);
+                renderMap(vendorId, incidents);
+                renderTable(vendorId, incidents);
+            } catch (error) {
+                console.error(`Error loading data for ${vendorId}:`, error);
+                // Show error in the UI
+                const chartContainer = document.getElementById(`chart-${vendorId}`);
+                const mapContainer = document.getElementById(`map-${vendorId}`);
+                const tableContainer = document.getElementById(`table-${vendorId}`);
+                
+                const errorMsg = '<div class="loading">Error loading data</div>';
+                if (chartContainer) chartContainer.innerHTML = errorMsg;
+                if (mapContainer) mapContainer.innerHTML = errorMsg;
+                if (tableContainer) tableContainer.innerHTML = errorMsg;
+            }
         }
         
         // Render the histogram chart
         function renderChart(vendorId, chartData) {
             const chartContainer = document.getElementById(`chart-${vendorId}`);
+            if (!chartContainer) return;
+            
             chartContainer.innerHTML = '<canvas></canvas>';
             const canvas = chartContainer.querySelector('canvas');
             
@@ -377,7 +512,10 @@
         // Render the map with incident locations
         function renderMap(vendorId, incidents) {
             const mapContainer = document.getElementById(`map-${vendorId}`);
-            mapContainer.innerHTML = '';
+            if (!mapContainer) return;
+            
+            mapContainer.innerHTML = '<div style="width:100%; height:250px"></div>';
+            const mapDiv = mapContainer.querySelector('div');
             
             // Clean up previous map
             if (maps[vendorId]) {
@@ -385,25 +523,29 @@
             }
             
             // Initialize the map
-            maps[vendorId] = L.map(mapContainer).setView([40.7, -74.0], 10);
+            maps[vendorId] = L.map(mapDiv).setView([40.7, -74.0], 10);
             
             // Add tile layer (OpenStreetMap)
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             }).addTo(maps[vendorId]);
             
             // Add markers for each incident
             incidents.forEach(incident => {
-                const marker = L.marker([incident.lat, incident.lng]).addTo(maps[vendorId]);
-                marker.bindPopup(`
-                    <strong>Date:</strong> ${incident.incident_date}<br>
-                    <strong>ID:</strong> ${incident.id}
-                `);
+                if (incident.lat && incident.lng) {
+                    const marker = L.marker([incident.lat, incident.lng]).addTo(maps[vendorId]);
+                    marker.bindPopup(`
+                        <strong>Date:</strong> ${incident.incident_date}<br>
+                        <strong>ID:</strong> ${incident.id}
+                    `);
+                }
             });
             
             // Set view to fit all markers
-            if (incidents.length > 0) {
-                const latLngs = incidents.map(incident => [incident.lat, incident.lng]);
+            if (incidents.length > 0 && incidents.some(i => i.lat && i.lng)) {
+                const latLngs = incidents
+                    .filter(i => i.lat && i.lng)
+                    .map(incident => [incident.lat, incident.lng]);
                 const bounds = L.latLngBounds(latLngs);
                 maps[vendorId].fitBounds(bounds);
             }
@@ -412,46 +554,71 @@
         // Render the data table
         function renderTable(vendorId, incidents) {
             const tableContainer = document.getElementById(`table-${vendorId}`);
+            if (!tableContainer) return;
             
             if (incidents.length === 0) {
                 tableContainer.innerHTML = '<p>No incidents found.</p>';
                 return;
             }
             
-            // Get schema from first incident
-            const firstIncident = incidents[0];
-            const dataKeys = Object.keys(firstIncident.data);
-            
-            // Create table
-            let tableHTML = `
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Date</th>
-                            ${dataKeys.map(key => `<th>${formatColumnName(key)}</th>`).join('')}
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            // Add rows for each incident
-            incidents.forEach(incident => {
-                tableHTML += `
-                    <tr>
-                        <td>${incident.id}</td>
-                        <td>${incident.incident_date}</td>
-                        ${dataKeys.map(key => `<td>${formatValue(incident.data[key])}</td>`).join('')}
-                    </tr>
+            try {
+                // Parse the data for the first incident to get schema
+                const firstIncident = incidents[0];
+                let dataObj = {};
+                
+                try {
+                    if (firstIncident.data) {
+                        dataObj = JSON.parse(firstIncident.data);
+                    }
+                } catch (e) {
+                    console.warn('Could not parse incident data JSON, using empty object', e);
+                }
+                
+                const dataKeys = Object.keys(dataObj);
+                
+                // Create table
+                let tableHTML = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Date</th>
+                                ${dataKeys.map(key => `<th>${formatColumnName(key)}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
                 `;
-            });
-            
-            tableHTML += `
-                    </tbody>
-                </table>
-            `;
-            
-            tableContainer.innerHTML = tableHTML;
+                
+                // Add rows for each incident
+                incidents.forEach(incident => {
+                    let incidentData = {};
+                    try {
+                        if (incident.data) {
+                            incidentData = JSON.parse(incident.data);
+                        }
+                    } catch (e) {
+                        console.warn(`Could not parse data for incident ${incident.id}`, e);
+                    }
+                    
+                    tableHTML += `
+                        <tr>
+                            <td>${incident.id}</td>
+                            <td>${incident.incident_date}</td>
+                            ${dataKeys.map(key => `<td>${formatValue(incidentData[key])}</td>`).join('')}
+                        </tr>
+                    `;
+                });
+                
+                tableHTML += `
+                        </tbody>
+                    </table>
+                `;
+                
+                tableContainer.innerHTML = tableHTML;
+            } catch (error) {
+                console.error('Error rendering table:', error);
+                tableContainer.innerHTML = '<p>Error rendering table data.</p>';
+            }
         }
         
         // Helper function to format column names
@@ -463,13 +630,14 @@
         
         // Helper function to format cell values
         function formatValue(value) {
+            if (value === null || value === undefined) return '';
             if (value === true) return '✓';
             if (value === false) return '✗';
             return value;
         }
         
         // Initialize the app
-        initializeApp();
+        document.addEventListener('DOMContentLoaded', initializeApp);
     </script>
 </body>
-</html> 
+</html>

@@ -3,55 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pure Navigation Demo</title>
+    <title>Key Navigation Basic Demo</title>
     <script src="../../dist/key-nav.js"></script>
     <style>
-        .nav-highlight {
-            outline: 3px solid #ffc107 !important;
-            outline-offset: 2px;
-            position: relative;
-            z-index: 1;
-            transition: outline-color 0.2s ease;
-            background-color: rgba(255, 193, 7, 0.1);
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: #333;
         }
         
-        .nav-active {
-            outline: 3px solid #28a745 !important;
-            outline-offset: 2px;
-            position: relative;
-            z-index: 2;
-            transition: outline-color 0.2s ease;
-            background-color: rgba(40, 167, 69, 0.1);
+        h1 {
+            color: #3498db;
+            margin-bottom: 20px;
         }
         
-        .section {
+        .instructions {
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 0 4px 4px 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .key-nav-container {
             margin: 10px;
             padding: 10px;
             border: 1px solid #ddd;
-            position: relative;
+            border-radius: 4px;
+            background-color: #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         }
         
         .item {
             margin: 5px;
-            padding: 5px;
+            padding: 10px;
             border: 1px solid #eee;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        
+        .key-nav-highlight {
+            outline: 3px solid #ffc107 !important;
+            outline-offset: 2px;
             position: relative;
+            z-index: 1;
+            background-color: rgba(255, 193, 7, 0.1);
+        }
+        
+        .key-nav-active {
+            outline: 3px solid #28a745 !important;
+            outline-offset: 2px;
+            position: relative;
+            z-index: 2;
+            background-color: rgba(40, 167, 69, 0.1);
         }
     </style>
 </head>
 <body>
-    <div id="root" class="section">
-        <div id="vendors" class="section">
+    <h1>Key Navigation Demo</h1>
+    
+    <div class="instructions">
+        <p><strong>Use your keyboard to navigate:</strong></p>
+        <ul>
+            <li>Arrow keys: Navigate between siblings</li>
+            <li>Enter: Go deeper into a section</li>
+            <li>Escape: Go up to parent</li>
+        </ul>
+    </div>
+    
+    <div id="root" class="key-nav-container">
+        <div id="section1" class="key-nav-container">
+            <h2>Vendors</h2>
             <div id="vendor1" class="item">Vendor 1</div>
             <div id="vendor2" class="item">Vendor 2</div>
             <div id="vendor3" class="item">Vendor 3</div>
         </div>
-        <div id="timeline" class="section">
+        
+        <div id="section2" class="key-nav-container">
+            <h2>Timeline</h2>
             <div id="event1" class="item">Event 1</div>
             <div id="event2" class="item">Event 2</div>
             <div id="event3" class="item">Event 3</div>
         </div>
-        <div id="map" class="section">
+        
+        <div id="section3" class="key-nav-container">
+            <h2>Map Locations</h2>
             <div id="location1" class="item">Location 1</div>
             <div id="location2" class="item">Location 2</div>
             <div id="location3" class="item">Location 3</div>
@@ -61,6 +99,32 @@
     <script>
         // Initialize navigation
         const nav = KeyNav.create(document.getElementById('root'));
+        
+        // Example of custom key handler for a focused item
+        document.getElementById('vendor3').addEventListener('keydown', function(e) {
+            if (this.classList.contains('key-nav-active')) {
+                if (e.key === 'a') {
+                    alert('Custom action for Vendor 3!');
+                    e.preventDefault();
+                }
+            }
+        });
+        
+        // Add info about focused state
+        document.querySelectorAll('.item').forEach(item => {
+            item.addEventListener('focus', function() {
+                console.log(`${this.id} is focused`);
+            });
+            
+            // Add info about focused state
+            const infoSpan = document.createElement('span');
+            infoSpan.style.display = 'block';
+            infoSpan.style.marginTop = '5px';
+            infoSpan.style.fontSize = '0.8em';
+            infoSpan.style.color = '#666';
+            infoSpan.textContent = 'When focused, press "a" for custom action';
+            item.appendChild(infoSpan);
+        });
     </script>
 </body>
-</html> 
+</html>

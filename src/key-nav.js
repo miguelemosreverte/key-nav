@@ -1,568 +1,557 @@
-// Pure Functional Navigation Framework
+// Key Navigation Library
+// A pure functional approach to keyboard navigation
 
-// Types
-const NavigableKind = {
-    Section: 'section',
-    Item: 'item'
+// Navigation Node Types
+const NodeType = {
+  ROOT: 'root',
+  CONTAINER: 'container',
+  ITEM: 'item'
 };
 
-// Navigation Patterns/Modes
-const NavigationMode = {
-    Standard: 'standard',  // Default navigation
-    SidenavViewport: 'sidenav-viewport'  // Sidenav with corresponding viewports
+// Navigation States
+const NavState = {
+  BROWSING: 'browsing', // Normal navigation between siblings
+  FOCUSED: 'focused'    // Entered a node, custom key handling
 };
 
-// Monadic Navigation Stack
-const NavMonad = {
-    pure: (x) => {
-        console.log('Creating new monad with value:', x.id);
-        return {
-            value: x,
-            history: []
-        };
-    },
-    
-    bind: (m, f) => {
-        const result = f(m.value);
-        console.log('Binding monad, new value:', result.value.id);
-        return {
-            value: result.value,
-            history: [...m.history, m.value]
-        };
-    }
-};
-
-// Navigation Actions (Morphisms)
-const Nav = {
-    // Identity morphism
-    stay: (state) => {
-        console.log('Staying at:', state.id);
-        return NavMonad.pure(state);
-    },
-    
-    // Sibling Navigation (same level)
-    next: (state) => {
-        console.log('Next called with state:', state.id, state.kind);
-        
-        // If we're at root level, move to first child
-        if (!state.parent) {
-            console.log('At root level, moving to first child');
-            return state.children.length > 0 
-                ? NavMonad.pure(state.children[0])
-                : NavMonad.pure(state);
-        }
-        
-        // Get siblings at current level
-        const siblings = Array.from(state.parent.children);
-        console.log('Siblings at current level:', siblings.map(s => s.id));
-        const idx = siblings.findIndex(s => s.id === state.id);
-        console.log('Current index:', idx);
-        
-        // If we're at the last sibling, stay at current state
-        if (idx === siblings.length - 1) {
-            console.log('At last sibling, staying at:', state.id);
-            return NavMonad.pure(state);
-        }
-        
-        // Move to next sibling
-        const nextState = siblings[idx + 1];
-        console.log('Moving to next sibling:', nextState.id);
-        return NavMonad.pure(nextState);
-    },
-    
-    prev: (state) => {
-        console.log('Prev called with state:', state.id, state.kind);
-        
-        // If we're at root level, stay at root
-        if (!state.parent) {
-            console.log('At root level, staying at root');
-            return NavMonad.pure(state);
-        }
-        
-        // Get siblings at current level
-        const siblings = Array.from(state.parent.children);
-        console.log('Siblings at current level:', siblings.map(s => s.id));
-        const idx = siblings.findIndex(s => s.id === state.id);
-        console.log('Current index:', idx);
-        
-        // If we're at the first sibling, stay at current state
-        if (idx === 0) {
-            console.log('At first sibling, staying at:', state.id);
-            return NavMonad.pure(state);
-        }
-        
-        // Move to previous sibling
-        const prevState = siblings[idx - 1];
-        console.log('Moving to previous sibling:', prevState.id);
-        return NavMonad.pure(prevState);
-    },
-    
-    // Parent-Child Navigation (different levels)
-    enter: (state, context) => {
-        console.log('Enter called with state:', state.id, state.kind);
-        
-        // Special case for sidenav-viewport pattern
-        if (context && context.mode === NavigationMode.SidenavViewport) {
-            // Check if this is a vendor item in the sidenav
-            if (state.value.dataset && state.value.dataset.viewport) {
-                const viewportId = state.value.dataset.viewport;
-                const viewport = context.allElements.find(el => el.id === viewportId);
-                
-                if (viewport && viewport.children.length > 0) {
-                    console.log('Entering viewport from vendor:', viewport.children[0].id);
-                    return NavMonad.pure(viewport.children[0]);
-                }
-            }
-        }
-        
-        // Default behavior
-        if (state.kind === NavigableKind.Section && state.children.length > 0) {
-            console.log('Entering first child:', state.children[0].id);
-            return NavMonad.pure(state.children[0]);
-        }
-        console.log('Cannot enter, staying at:', state.id);
-        return NavMonad.pure(state);
-    },
-            
-    exit: (state, context) => {
-        console.log('Exit called with state:', state.id, state.kind);
-        
-        // Special case for sidenav-viewport pattern
-        if (context && context.mode === NavigationMode.SidenavViewport) {
-            // Check if we're in a viewport section
-            if (state.parent && state.parent.value.classList.contains('viewport')) {
-                const viewportId = state.parent.id;
-                // Find matching vendor
-                const vendor = context.allElements.find(el => 
-                    el.value.dataset && el.value.dataset.viewport === viewportId
-                );
-                
-                if (vendor) {
-                    console.log('Exiting from viewport to vendor:', vendor.id);
-                    return NavMonad.pure(vendor);
-                }
-            }
-        }
-        
-        // Default behavior - go to parent
-        if (state.parent) {
-            console.log('Exiting to parent:', state.parent.id);
-            return NavMonad.pure(state.parent);
-        }
-        console.log('Cannot exit, staying at:', state.id);
-        return NavMonad.pure(state);
-    }
-};
-
-// UI Effects (Pure functions that produce side effects)
+// Visual UI effects (side effects)
 const UI = {
-    // Insert default highlight styles into the document
-    insertDefaultStyles: () => {
-        // Check if styles already exist
-        if (document.getElementById('pure-nav-default-styles')) return;
-        
-        // Create style element
-        const styleEl = document.createElement('style');
-        styleEl.id = 'pure-nav-default-styles';
-        
-        // Default styles for highlighted elements
-        styleEl.textContent = `
-            .nav-highlight {
-                outline: 3px solid #ffcc00 !important; /* Bright yellow solid outline */
-                outline-offset: 2px;
-                position: relative;
-                border-radius: 4px;
-            }
-            .nav-active {
-                outline: 2px solid #33cc33 !important; /* Green solid outline */
-                outline-offset: 2px;
-                position: relative;
-                border-radius: 4px;
-            }
-            .viewport {
-                display: none;
-            }
-            .viewport.active {
-                display: block;
-            }
-        `;
-        
-        // Insert into head
-        document.head.appendChild(styleEl);
-        
-        console.log('Default navigation styles inserted');
-    },
+  insertStyles: () => {
+    if (document.getElementById('key-nav-styles')) return;
     
-    highlight: (element) => {
-        console.log('Highlighting element:', element?.id);
-        // Remove highlight from all elements
-        document.querySelectorAll('.nav-highlight').forEach(el => {
-            console.log('Removing highlight from:', el.id);
-            el.classList.remove('nav-highlight');
-        });
-        // Add highlight to current element
-        if (element?.value) {
-            console.log('Adding highlight to:', element.value.id);
-            element.value.classList.add('nav-highlight');
-        }
-        return element;
-    },
+    const style = document.createElement('style');
+    style.id = 'key-nav-styles';
+    style.textContent = `
+      .key-nav-highlight {
+        outline: 3px solid #ffcc00 !important;
+        outline-offset: 2px;
+        position: relative;
+        z-index: 1;
+        background-color: rgba(255, 193, 7, 0.1);
+      }
+      .key-nav-active {
+        outline: 2px solid #33cc33 !important;
+        outline-offset: 2px;
+        position: relative;
+        z-index: 2;
+        background-color: rgba(40, 167, 69, 0.1);
+      }
+      .key-nav-viewport {
+        display: none;
+      }
+      .key-nav-viewport.active {
+        display: block;
+      }
+      
+      /* Debug indicators */
+      .key-nav-debug {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 10px 15px;
+        border-radius: 8px;
+        font-size: 14px;
+        z-index: 9999;
+      }
+    `;
+    document.head.appendChild(style);
+  },
+  
+  highlight: (element) => {
+    document.querySelectorAll('.key-nav-highlight').forEach(el => 
+      el.classList.remove('key-nav-highlight'));
     
-    activate: (element) => {
-        document.querySelectorAll('.nav-active').forEach(el => 
-            el.classList.remove('nav-active'));
-        if (element?.value) {
-            element.value.classList.add('nav-active');
-        }
-        return element;
-    },
-    
-    // Special UI effect for viewport pattern
-    updateViewport: (element, context) => {
-        if (!element || !context || context.mode !== NavigationMode.SidenavViewport) return element;
-        
-        let viewportId = null;
-        
-        // If element is a vendor, get its viewport
-        if (element.value.dataset && element.value.dataset.viewport) {
-            viewportId = element.value.dataset.viewport;
-        }
-        // If element is in a viewport, get that viewport's ID
-        else if (element.parent && element.parent.value.classList.contains('viewport')) {
-            viewportId = element.parent.id;
-        }
-        
-        if (viewportId) {
-            // Hide all viewports
-            document.querySelectorAll('.viewport').forEach(vp => {
-                vp.classList.remove('active');
-            });
-            // Show this viewport
-            const viewport = document.getElementById(viewportId);
-            if (viewport) {
-                viewport.classList.add('active');
-            }
-        }
-        
-        return element;
+    if (element?.dom) {
+      element.dom.classList.add('key-nav-highlight');
+      // Ensure element is visible in viewport
+      element.dom.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
+  },
+  
+  activate: (element) => {
+    document.querySelectorAll('.key-nav-active').forEach(el => 
+      el.classList.remove('key-nav-active'));
+    
+    if (element?.dom) {
+      element.dom.classList.add('key-nav-active');
+    }
+  },
+  
+  showViewport: (viewportId) => {
+    // Hide all viewports
+    document.querySelectorAll('.key-nav-viewport').forEach(viewport => 
+      viewport.classList.remove('active'));
+    
+    // Show the target viewport
+    if (viewportId) {
+      const viewport = document.getElementById(viewportId);
+      if (viewport) {
+        viewport.classList.add('active');
+      }
+    }
+  }
 };
 
-// Keyboard Event Handler (Pure function)
-const handleKey = (key, state, context) => {
-    console.log('Handling key:', key, 'Current state:', state.id);
-    const actions = {
-        // Sibling Navigation
-        'ArrowRight': () => Nav.next(state),
-        'ArrowLeft': () => Nav.prev(state),
-        'ArrowDown': () => Nav.next(state),  // Down is just next sibling
-        'ArrowUp': () => Nav.prev(state),     // Up is just previous sibling
-        
-        // Parent-Child Navigation
-        'Enter': () => Nav.enter(state, context),
-        'Escape': () => Nav.exit(state, context),
-        
-        'default': () => Nav.stay(state)
+// Find first navigable elements in the DOM
+const findFirstLevelNavigable = (rootElement) => {
+  // Check direct children first
+  const directNavigable = Array.from(rootElement.children)
+    .filter(el => el.id || el.classList.contains('key-nav-auto'));
+  
+  if (directNavigable.length > 0) {
+    return directNavigable;
+  }
+  
+  // Look for containers one level deep
+  const containers = Array.from(rootElement.children)
+    .filter(el => 
+      el.classList.contains('key-nav-container') || 
+      el.querySelectorAll('[id]').length > 0
+    );
+    
+  // Find navigable elements in each container
+  let result = [];
+  for (const container of containers) {
+    const navigableInContainer = Array.from(container.children)
+      .filter(el => el.id || el.classList.contains('key-nav-auto'));
+    
+    if (navigableInContainer.length > 0) {
+      result = result.concat(navigableInContainer);
+    }
+  }
+  
+  return result;
+};
+
+// Parse DOM to navigation structure
+const createNavStructure = (rootElement, options = {}) => {
+  const parseNode = (element, parent = null) => {
+    // Skip elements without ID
+    if (!element.id && !element.classList.contains('key-nav-auto')) {
+      return null;
+    }
+    
+    // Auto-assign ID if missing
+    if (!element.id && element.classList.contains('key-nav-auto')) {
+      element.id = `key-nav-${Math.random().toString(36).substring(2, 9)}`;
+    }
+    
+    // Determine node type
+    let type = NodeType.ITEM;
+    if (!parent) {
+      type = NodeType.ROOT;
+    } else if (element.classList.contains('key-nav-container') ||
+               element.querySelector('[id]')) {
+      type = NodeType.CONTAINER;
+    }
+    
+    // Create node object
+    const node = {
+      id: element.id,
+      dom: element,
+      type,
+      parent,
+      children: [],
+      viewportId: element.dataset.viewport || null,
+      state: NavState.BROWSING,
+      customHandlers: {},
+      
+      // Add custom key handler for focused state
+      addKeyHandler: function(key, handler) {
+        this.customHandlers[key] = handler;
+        return this;
+      },
+      
+      // Handle key when focused (returns true if handled)
+      handleKey: function(key) {
+        if (this.state !== NavState.FOCUSED) return false;
+        if (this.customHandlers[key]) {
+          this.customHandlers[key](this);
+          return true;
+        }
+        return false;
+      }
     };
     
-    const result = (actions[key] || actions['default'])();
-    console.log('Navigation result:', result.value.id);
-    return result;
-};
-
-// Helper function to get all elements in parsed structure (flatten)
-const getAllElements = (root) => {
-    const result = [root];
-    if (root.children && root.children.length > 0) {
-        for (const child of root.children) {
-            result.push(...getAllElements(child));
-        }
+    // Parse children
+    if (type !== NodeType.ITEM) {
+      Array.from(element.children)
+        .map(child => parseNode(child, node))
+        .filter(Boolean) // Remove null entries
+        .forEach(child => node.children.push(child));
     }
-    return result;
+    
+    return node;
+  };
+  
+  // Start parsing from root
+  return parseNode(rootElement);
 };
 
-// Initialize Navigation (Factory function)
-const createNav = (rootElement, options = {}) => {
-    // Insert default styles
-    UI.insertDefaultStyles();
+// Core navigation
+const KeyNavigation = (rootElement, options = {}) => {
+  // Initialize
+  UI.insertStyles();
+  
+  // Parse structure
+  let root = createNavStructure(rootElement, options);
+  let current = null;
+  let navHistory = [];
+  let mutationObserver = null;
+  
+  // Get all nodes (for finding by ID)
+  const getAllNodes = (node, result = []) => {
+    result.push(node);
+    node.children.forEach(child => getAllNodes(child, result));
+    return result;
+  };
+  
+  // Find a node by ID
+  const findNodeById = (id) => {
+    const allNodes = getAllNodes(root);
+    return allNodes.find(node => node.id === id);
+  };
+  
+  // Initialize the current node - try to find a good starting point
+  const initializeCurrentNode = () => {
+    // If initialItem is specified in options, use that
+    if (options.initialItem) {
+      const initialNode = findNodeById(options.initialItem);
+      if (initialNode) {
+        return initialNode;
+      }
+    }
     
-    // Convert DOM structure to NavigableElements
-    const parseElement = (el, parentObj = null) => {
-        // Create the element structure first
-        const element = {
-            kind: el.classList.contains('section') ? NavigableKind.Section : NavigableKind.Item,
-            id: el.id,
-            value: el,
-            parent: parentObj, // Assign the correct parent object
-            children: []      // Initialize children array
-        };
-
-        // Now parse children, passing the newly created 'element' as their parent
-        element.children = Array.from(el.children)
-            .filter(childEl => childEl.id) // Only navigate elements with IDs
-            .map(childEl => parseElement(childEl, element)); // Pass 'element' as parent
-
-        console.log('Parsed element:', element.id, element.kind, 'Parent:', parentObj?.id);
-        return element;
-    };
+    // Otherwise, try to find vendors or first-level navigable items
+    const firstLevelNodes = root.children;
     
-    // Initialize with empty structures
-    let root = null;
-    let allElements = [];
-    let currentState = null;
-    let initialMonadState = null;
-    let context = null;
-    let mutationObserver = null;
+    // If we have child nodes, pick the first one
+    if (firstLevelNodes.length > 0) {
+      // First, look for a vendor (element with viewport attribute)
+      const vendorNode = firstLevelNodes.find(node => node.viewportId);
+      if (vendorNode) {
+        return vendorNode;
+      }
+      
+      // Otherwise, just take the first child
+      return firstLevelNodes[0];
+    }
     
-    // Function to (re)parse the DOM structure
-    const refreshNavigation = () => {
-        console.log('Refreshing navigation structure...');
-        
-        // Parse the DOM structure again
-        root = parseElement(rootElement);
-        console.log('Root element:', root.id, root.kind);
-        
-        // Get all elements for easy lookup
-        allElements = getAllElements(root);
-        
-        // Create navigation context based on options
-        context = {
-            mode: options.mode || NavigationMode.Standard,
-            allElements: allElements,
-            options: options
-        };
-        
-        // Create initial state monad if it doesn't exist yet
-        if (!initialMonadState) {
-            initialMonadState = NavMonad.pure(root);
+    // If no children found, look for second-level nodes
+    const allNodes = getAllNodes(root);
+    const goodStartNodes = allNodes.filter(node => 
+      node.id !== root.id && (node.viewportId || node.children.length > 0)
+    );
+    
+    if (goodStartNodes.length > 0) {
+      return goodStartNodes[0];
+    }
+    
+    // Fallback to root if nothing better found
+    return root;
+  };
+  
+  // Set initial current node
+  current = initializeCurrentNode();
+  
+  // Navigation functions
+  const nav = {
+    next: () => {
+      if (current.state === NavState.FOCUSED) return current;
+      
+      if (current.parent) {
+        const siblings = current.parent.children;
+        const index = siblings.indexOf(current);
+        if (index < siblings.length - 1) {
+          return siblings[index + 1];
         }
-        
-        // Try to maintain current selection if possible
-        if (currentState && currentState.value) {
-            const currentId = currentState.value.id;
-            // Try to find the same element in the new structure
-            const sameElement = allElements.find(el => el.id === currentId);
+      }
+      return current;
+    },
+    
+    prev: () => {
+      if (current.state === NavState.FOCUSED) return current;
+      
+      if (current.parent) {
+        const siblings = current.parent.children;
+        const index = siblings.indexOf(current);
+        if (index > 0) {
+          return siblings[index - 1];
+        }
+      }
+      return current;
+    },
+    
+    enter: () => {
+      // If already focused, stay focused
+      if (current.state === NavState.FOCUSED) return current;
+      
+      // If it's a container with children, go to first child
+      if ((current.type === NodeType.CONTAINER || current.type === NodeType.ROOT) && 
+          current.children.length > 0) {
+        return current.children[0];
+      }
+      
+      // If it has a viewport and is an item, activate the viewport
+      if (current.viewportId) {
+        // Find first element in the viewport
+        const viewport = document.getElementById(current.viewportId);
+        if (viewport) {
+          UI.showViewport(current.viewportId);
+          
+          // Find first navigable element in viewport
+          const firstViewportElement = getAllNodes(root)
+            .find(node => node.dom.closest(`#${current.viewportId}`));
             
-            if (sameElement) {
-                // Keep the same selected element
-                currentState = NavMonad.pure(sameElement);
-                console.log('Maintaining selection on:', sameElement.id);
-            } else {
-                // Fall back to root if element no longer exists
-                currentState = NavMonad.pure(root);
-                console.log('Selected element no longer exists, falling back to root');
-            }
-        } else {
-            // Set initial current state
-            currentState = initialMonadState;
+          if (firstViewportElement) {
+            return firstViewportElement;
+          }
         }
-        
-        // If it's a sidenav-viewport pattern and initialItem is specified, find it
-        if (context.mode === NavigationMode.SidenavViewport && options.initialItem) {
-            const initialElement = allElements.find(el => el.id === options.initialItem);
-            if (initialElement) {
-                currentState = NavMonad.pure(initialElement);
-                console.log('Setting initial state to:', initialElement.id);
-            }
+      }
+      
+      // Become focused if it's an item
+      if (current.type === NodeType.ITEM) {
+        current.state = NavState.FOCUSED;
+        UI.activate(current);
+      }
+      
+      return current;
+    },
+    
+    exit: () => {
+      // If focused, revert to browsing
+      if (current.state === NavState.FOCUSED) {
+        current.state = NavState.BROWSING;
+        UI.activate(null);
+        return current;
+      }
+      
+      // If inside a viewport, find the item that controls this viewport
+      const viewportElement = current.dom.closest('.key-nav-viewport');
+      if (viewportElement) {
+        const viewportId = viewportElement.id;
+        const viewportController = getAllNodes(root)
+          .find(node => node.viewportId === viewportId);
+          
+        if (viewportController) {
+          return viewportController;
         }
-        
-        // Update UI
-        if (currentState.value) {
-            UI.highlight(currentState.value);
-            if (context.mode === NavigationMode.SidenavViewport) {
-                UI.updateViewport(currentState.value, context);
-            }
-        }
-        
-        return {
-            root,
-            allElements,
-            currentState,
-            context
-        };
+      }
+      
+      // Otherwise go to parent
+      if (current.parent) {
+        return current.parent;
+      }
+      
+      return current;
+    }
+  };
+  
+  // Handle keyboard input
+  const handleKeyDown = (event) => {
+    const key = event.key;
+    
+    // Ignore if no current element
+    if (!current) return;
+    
+    // Check if current element wants to handle this key
+    if (current.handleKey(key)) {
+      event.preventDefault();
+      return;
+    }
+    
+    let nextNode = current;
+    
+    switch (key) {
+      case 'ArrowDown':
+      case 'ArrowRight':
+        nextNode = nav.next();
+        break;
+      case 'ArrowUp':
+      case 'ArrowLeft':
+        nextNode = nav.prev();
+        break;
+      case 'Enter':
+        nextNode = nav.enter();
+        break;
+      case 'Escape':
+        nextNode = nav.exit();
+        break;
+      default:
+        return; // Don't handle other keys
+    }
+    
+    // Update current node and UI
+    if (nextNode !== current) {
+      navHistory.push(current);
+      current = nextNode;
+      UI.highlight(current);
+      
+      // Handle viewport display if needed
+      if (current.viewportId && current.state !== NavState.FOCUSED) {
+        UI.showViewport(current.viewportId);
+      }
+    }
+    
+    event.preventDefault();
+  };
+  
+  // Setup keyboard listener
+  document.addEventListener('keydown', handleKeyDown);
+  
+  // Refresh navigation structure
+  const refresh = () => {
+    // Store current ID to try to restore selection
+    const currentId = current?.id;
+    
+    // Reparse the structure
+    root = createNavStructure(rootElement, options);
+    
+    // Try to restore the selection
+    if (currentId) {
+      const sameNode = findNodeById(currentId);
+      if (sameNode) {
+        current = sameNode;
+      } else {
+        current = initializeCurrentNode();
+      }
+    } else {
+      current = initializeCurrentNode();
+    }
+    
+    // Update UI
+    UI.highlight(current);
+    if (current.viewportId) {
+      UI.showViewport(current.viewportId);
+    }
+    
+    return current;
+  };
+  
+  // Observer for DOM changes
+  const setupObserver = () => {
+    if (mutationObserver) {
+      mutationObserver.disconnect();
+    }
+    
+    // Debounce refresh
+    let refreshTimeout = null;
+    const debouncedRefresh = () => {
+      clearTimeout(refreshTimeout);
+      refreshTimeout = setTimeout(() => {
+        refresh();
+        refreshTimeout = null;
+      }, 200);
     };
     
-    // Initial parsing
-    refreshNavigation();
-    
-    // Set up keyboard listener
-    document.addEventListener('keydown', (e) => {
-        console.log('Key pressed:', e.key);
-        console.log('Current state before update:', currentState.value.id);
-        
-        // Handle the key press with context
-        const result = handleKey(e.key, currentState.value, context);
-        
-        // Update current state
-        currentState = result;
-        
-        // Update UI with context
-        UI.highlight(currentState.value);
-        if (context.mode === NavigationMode.SidenavViewport) {
-            UI.updateViewport(currentState.value, context);
-        }
-        
-        console.log('Current state after update:', currentState.value.id);
-        
-        // Prevent default browser actions
-        e.preventDefault();
+    // Create observer
+    mutationObserver = new MutationObserver((mutations) => {
+      const hasStructuralChanges = mutations.some(mutation => 
+        mutation.type === 'childList' || 
+        (mutation.type === 'attributes' && 
+         (mutation.attributeName === 'id' || mutation.attributeName === 'class'))
+      );
+      
+      if (hasStructuralChanges) {
+        debouncedRefresh();
+      }
     });
     
-    // Set up mutation observer to detect DOM changes
-    const setupObserver = () => {
-        // Disconnect previous observer if exists
-        if (mutationObserver) {
-            mutationObserver.disconnect();
-        }
-        
-        // Create a debounced version of refresh to avoid excessive updates
-        let refreshTimeout = null;
-        const debouncedRefresh = () => {
-            if (refreshTimeout) {
-                clearTimeout(refreshTimeout);
-            }
-            refreshTimeout = setTimeout(() => {
-                console.log('DOM mutation detected, refreshing navigation');
-                refreshNavigation();
-                refreshTimeout = null;
-            }, 100); // 100ms debounce
-        };
-        
-        // Create new observer
-        mutationObserver = new MutationObserver((mutations) => {
-            // Only refresh if we have mutations with added/removed nodes
-            const hasRelevantMutations = mutations.some(mutation => 
-                mutation.type === 'childList' && 
-                (mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0)
-            );
-            
-            if (hasRelevantMutations) {
-                debouncedRefresh();
-            }
-        });
-        
-        // Start observing rootElement for all changes to the DOM tree
-        mutationObserver.observe(rootElement, { 
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['id', 'class'] // Only care about ID and class changes
-        });
-        
-        console.log('Mutation observer set up for automatic refresh');
-    };
+    // Start observing
+    mutationObserver.observe(rootElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['id', 'class']
+    });
+  };
+  
+  // Auto-setup observer if enabled
+  if (options.autoRefresh !== false) {
+    setupObserver();
+  }
+  
+  // Initialize UI
+  UI.highlight(current);
+  
+  // Return public API
+  return {
+    // Get current state
+    getCurrent: () => current,
     
-    // Set up the mutation observer if autoRefresh is enabled
-    if (options.autoRefresh !== false) { // Enabled by default
-        setupObserver();
+    // Update methods
+    refresh,
+    enableAutoRefresh: setupObserver,
+    disableAutoRefresh: () => {
+      if (mutationObserver) {
+        mutationObserver.disconnect();
+        mutationObserver = null;
+        return true;
+      }
+      return false;
+    },
+    
+    // Custom handler
+    addKeyHandler: (nodeId, key, handler) => {
+      const node = findNodeById(nodeId);
+      if (node) {
+        node.addKeyHandler(key, handler);
+        return true;
+      }
+      return false;
     }
-    
-    return {
-        getCurrentState: () => currentState,
-        getInitialParsedState: () => initialMonadState,
-        getMode: () => context.mode,
-        getAllElements: () => allElements,
-        getHistory: () => currentState?.history || [],
-        refresh: refreshNavigation, // Expose refresh method for manual updates
-        enableAutoRefresh: () => {
-            setupObserver();
-            return true;
-        },
-        disableAutoRefresh: () => {
-            if (mutationObserver) {
-                mutationObserver.disconnect();
-                mutationObserver = null;
-                return true;
-            }
-            return false;
-        }
-    };
+  };
 };
 
-// Special factory function for sidenav-viewport pattern
-const createSidenavViewport = (containerElement, options = {}) => {
-    // Set up options for sidenav-viewport mode
-    const fullOptions = {
-        mode: NavigationMode.SidenavViewport,
-        initialItem: options.initialItem || null, // Initial item to select (default: first vendor)
-        viewportSelector: options.viewportSelector || '.viewport', // Selector for viewport elements
-        vendorSelector: options.vendorSelector || '[data-viewport]', // Selector for vendor elements
-        ...options
-    };
+// Helper to create a sidenav with viewport
+const createSidenavViewport = (rootElement, options = {}) => {
+  // Set all viewports to have the correct class
+  Array.from(document.querySelectorAll(options.viewportSelector || '.viewport'))
+    .forEach(viewport => viewport.classList.add('key-nav-viewport'));
+  
+  // Create the navigation
+  const nav = KeyNavigation(rootElement, options);
+  
+  // Override to add viewport handling
+  const originalRefresh = nav.refresh;
+  nav.refresh = () => {
+    const result = originalRefresh();
     
-    // Create the navigation
-    const nav = createNav(containerElement, fullOptions);
-    
-    // If no initial item was specified, find the first vendor
-    if (!fullOptions.initialItem) {
-        const vendors = nav.getAllElements().filter(el => 
-            el.value.dataset && el.value.dataset.viewport
-        );
-        
-        if (vendors.length > 0) {
-            const firstVendor = vendors[0];
-            // Make the first vendor active
-            UI.highlight(firstVendor);
-            UI.updateViewport(firstVendor, {
-                mode: NavigationMode.SidenavViewport,
-                allElements: nav.getAllElements()
-            });
-        }
+    // Make first sidenav item active if nothing is selected
+    if (result === nav.getCurrent() && result.type === NodeType.ROOT) {
+      const firstItem = result.children[0];
+      if (firstItem && firstItem.viewportId) {
+        UI.highlight(firstItem);
+        UI.showViewport(firstItem.viewportId);
+      }
     }
     
-    // Enhance the refresh method to also handle sidenav-viewport specifics
-    const originalRefresh = nav.refresh;
-    nav.refresh = () => {
-        // Call the original refresh method
-        const result = originalRefresh();
-        
-        // If no initial item was specified, find the first vendor after refresh
-        if (!fullOptions.initialItem) {
-            const vendors = nav.getAllElements().filter(el => 
-                el.value.dataset && el.value.dataset.viewport
-            );
-            
-            if (vendors.length > 0) {
-                const firstVendor = vendors[0];
-                // If current state is not a vendor or viewport, make the first vendor active
-                const currentState = nav.getCurrentState();
-                if (!currentState || !currentState.value) {
-                    UI.highlight(firstVendor);
-                    UI.updateViewport(firstVendor, {
-                        mode: NavigationMode.SidenavViewport,
-                        allElements: nav.getAllElements()
-                    });
-                }
-            }
-        }
-        
-        return result;
-    };
-    
-    return nav;
+    return result;
+  };
+  
+  return nav;
 };
 
-// Export as module or browser global
+// Export the library
 const KeyNav = {
-    create: createNav,
-    createSidenavViewport,
-    Nav,
-    UI,
-    NavMonad,
-    handleKey,
-    NavigableKind,
-    NavigationMode
+  create: KeyNavigation,
+  createSidenavViewport,
+  NodeType,
+  NavState,
+  UI
 };
 
 // Browser export
 if (typeof window !== 'undefined') {
-    window.KeyNav = KeyNav;
+  window.KeyNav = KeyNav;
 }
 
 // CommonJS export
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = KeyNav;
+  module.exports = KeyNav;
 }
 
 // ES Module export
-// export default KeyNav; 
+// export default KeyNav;
