@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pure Navigation Demo</title>
+    <script src="../../dist/key-nav.js"></script>
+    <style>
+        .nav-highlight {
+            outline: 3px solid #ffc107 !important;
+            outline-offset: 2px;
+            position: relative;
+            z-index: 1;
+            transition: outline-color 0.2s ease;
+            background-color: rgba(255, 193, 7, 0.1);
+        }
+        
+        .nav-active {
+            outline: 3px solid #28a745 !important;
+            outline-offset: 2px;
+            position: relative;
+            z-index: 2;
+            transition: outline-color 0.2s ease;
+            background-color: rgba(40, 167, 69, 0.1);
+        }
+        
+        .section {
+            margin: 10px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            position: relative;
+        }
+        
+        .item {
+            margin: 5px;
+            padding: 5px;
+            border: 1px solid #eee;
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+    <div id="root" class="section">
+        <div id="vendors" class="section">
+            <div id="vendor1" class="item">Vendor 1</div>
+            <div id="vendor2" class="item">Vendor 2</div>
+            <div id="vendor3" class="item">Vendor 3</div>
+        </div>
+        <div id="timeline" class="section">
+            <div id="event1" class="item">Event 1</div>
+            <div id="event2" class="item">Event 2</div>
+            <div id="event3" class="item">Event 3</div>
+        </div>
+        <div id="map" class="section">
+            <div id="location1" class="item">Location 1</div>
+            <div id="location2" class="item">Location 2</div>
+            <div id="location3" class="item">Location 3</div>
+        </div>
+    </div>
+    
+    <script>
+        // Initialize navigation
+        const nav = KeyNav.create(document.getElementById('root'));
+    </script>
+</body>
+</html> 

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sidenav with Viewports Demo</title>
+    <script src="../../dist/key-nav.js"></script>
+    <style>
+        body {
+            display: flex;
+            font-family: sans-serif;
+            margin: 0;
+            height: 100vh;
+            overflow: hidden; /* Prevent body scroll */
+        }
+        #nav-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+        #sidenav {
+            width: 250px;
+            border-right: 1px solid #ccc;
+            padding: 15px;
+            height: 100%;
+            overflow-y: auto;
+            box-sizing: border-box;
+            flex-shrink: 0; /* Prevent shrinking */
+        }
+        #content {
+            flex-grow: 1;
+            padding: 20px;
+            height: 100%;
+            overflow-y: auto; /* Allow content scrolling */
+            box-sizing: border-box;
+        }
+        /* Vendor item styling */
+        .vendor-item {
+            padding: 10px;
+            margin-bottom: 5px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            cursor: default;
+        }
+        /* Sections within viewport */
+        .viewport-section {
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+        }
+        /* Content viewport styling */
+        .viewport {
+            border: 1px dashed #ddd;
+            padding: 15px;
+            min-height: 200px;
+        }
+        h3, h4 {
+            margin-top: 0;
+            color: #333;
+        }
+        /* Headers are non-navigable */
+        .header {
+            pointer-events: none;
+            user-select: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Root container for navigation parsing -->
+    <div id="nav-container" class="section">
+        <!-- Sidenav (contains vendor items) -->
+        <div id="sidenav" class="section">
+            <div class="header"><h3>Vendors</h3></div>
+            <div id="vendor1" class="vendor-item item" data-viewport="viewport1">Vendor 1</div>
+            <div id="vendor2" class="vendor-item item" data-viewport="viewport2">Vendor 2</div>
+            <div id="vendor3" class="vendor-item item" data-viewport="viewport3">Vendor 3</div>
+        </div>
+
+        <!-- Content Area (contains viewports) -->
+        <div id="content" class="section">
+            <div class="header"><h4>Content Viewport</h4></div>
+            <!-- Viewport for Vendor 1 -->
+            <div id="viewport1" class="viewport section">
+                <div id="v1-section1" class="viewport-section item">Vendor 1 - Section 1</div>
+                <div id="v1-section2" class="viewport-section item">Vendor 1 - Section 2</div>
+                <div id="v1-section3" class="viewport-section item">Vendor 1 - Section 3</div>
+            </div>
+            <!-- Viewport for Vendor 2 -->
+            <div id="viewport2" class="viewport section">
+                <div id="v2-section1" class="viewport-section item">Vendor 2 - Section 1</div>
+                <div id="v2-section2" class="viewport-section item">Vendor 2 - Section 2</div>
+                <div id="v2-section3" class="viewport-section item">Vendor 2 - Section 3</div>
+            </div>
+            <!-- Viewport for Vendor 3 -->
+            <div id="viewport3" class="viewport section">
+                <div id="v3-section1" class="viewport-section item">Vendor 3 - Section 1</div>
+                <div id="v3-section2" class="viewport-section item">Vendor 3 - Section 2</div>
+                <div id="v3-section3" class="viewport-section item">Vendor 3 - Section 3</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize the sidenav-viewport navigation with a single line
+        const nav = KeyNav.createSidenavViewport(document.getElementById('nav-container'), {
+            initialItem: 'vendor1',  // Start with vendor1 selected (optional)
+            debug: true             // Enable extra console logging (optional)
+        });
+        
+        // That's it! No custom event handlers or state management needed.
+        // The navigation framework now handles:
+        // 1. Arrow keys to navigate between vendors in sidenav or sections in viewport
+        // 2. Enter to go from vendor to first section in viewport
+        // 3. Escape to go from viewport section back to vendor
+        // 4. Updating the UI to show the correct viewport
+    </script>
+</body>
+</html> 
