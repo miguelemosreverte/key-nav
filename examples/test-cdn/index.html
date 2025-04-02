@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KeyNav CDN Test</title>
+    <!-- Load KeyNav from CDN -->
+    <script src="https://unpkg.com/@miguellemos/key-nav@1.0.6/dist/key-nav.js"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 2rem;
+        }
+        
+        .section {
+            border: 1px solid #ddd;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+        }
+        
+        .item {
+            padding: 0.5rem;
+            margin: 0.5rem 0 0.5rem 1rem;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+        
+        .instructions {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-left: 4px solid #0d6efd;
+            margin-bottom: 2rem;
+        }
+        
+        /* The framework adds these classes automatically */
+        .nav-highlight {
+            /* We don't need to define this as the framework adds its own styles */
+        }
+    </style>
+</head>
+<body>
+    <h1>KeyNav.js CDN Test</h1>
+    
+    <div class="instructions">
+        <p><strong>Navigation Instructions:</strong></p>
+        <ul>
+            <li>Use <strong>Arrow keys</strong> (Up/Down/Left/Right) to navigate between sibling elements</li>
+            <li>Press <strong>Enter</strong> to go deeper into a section</li>
+            <li>Press <strong>Escape</strong> to go back up to the parent</li>
+        </ul>
+    </div>
+    
+    <div id="root" class="section">
+        <div id="section1" class="section">
+            <div id="item1" class="item">Item 1</div>
+            <div id="item2" class="item">Item 2</div>
+            <div id="item3" class="item">Item 3</div>
+        </div>
+        
+        <div id="section2" class="section">
+            <div id="item4" class="item">Item 4</div>
+            <div id="item5" class="item">Item 5</div>
+            <div id="item6" class="item">Item 6</div>
+        </div>
+        
+        <div id="section3" class="section">
+            <div id="item7" class="item">Item 7</div>
+            <div id="item8" class="item">Item 8</div>
+            <div id="item9" class="item">Item 9</div>
+        </div>
+    </div>
+    
+    <script>
+        // Initialize navigation on the root element
+        const nav = KeyNav.create(document.getElementById('root'));
+        
+        // Output navigation info to console
+        console.log('KeyNav initialized!', nav);
+    </script>
+</body>
+</html> 
