@@ -2,6 +2,10 @@
 
 A pure functional keyboard navigation framework with mathematically sound foundations.
 
+![Screenshot 2025-04-02 at 02 40 45](https://github.com/user-attachments/assets/209728ea-b962-42c1-baec-e8c3961eb860)
+![Screenshot 2025-04-02 at 02 40 50](https://github.com/user-attachments/assets/8abe64ce-950e-4cd0-a4ca-6563f66abc01)
+
+
 ## Features
 
 - Arrow key navigation between UI elements
