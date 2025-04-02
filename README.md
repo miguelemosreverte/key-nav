@@ -18,13 +18,13 @@ A pure functional keyboard navigation framework with mathematically sound founda
 ## Installation
 
 ```bash
-npm install key-nav
+npm install @miguellemos/key-nav
 ```
 
 Or include directly in your HTML:
 
 ```html
-<script src="https://unpkg.com/key-nav@1.0.0/dist/key-nav.js"></script>
+<script src="https://unpkg.com/@miguellemos/key-nav@1.0.0/dist/key-nav.js"></script>
 ```
 
 ## Quick Start
